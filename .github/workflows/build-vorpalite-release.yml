@@ -37,6 +37,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: ${{ inputs.ref || github.ref }}
+          submodules: recursive
 
       # Minimal option set builds only the vorpalite lib+executable, skipping graphics/tests/other CLI tools
       - name: Select minimal build options
