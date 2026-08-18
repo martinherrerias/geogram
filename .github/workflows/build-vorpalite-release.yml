@@ -75,6 +75,12 @@ jobs:
           cp "$exe" dist/
           cp LICENSE dist/
 
+      - name: Smoke test executable
+        shell: bash
+        run: |
+          chmod +x "dist/${{ matrix.exe_name }}" || true
+          "./dist/${{ matrix.exe_name }}" --version
+
       - name: Package and checksum (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
