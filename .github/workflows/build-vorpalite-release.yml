@@ -29,7 +29,7 @@ jobs:
             exe_name: vorpalite
           - os: macos-14
             platform_id: mac64-arm64
-            configure_platform: Darwin-aarch64-clang-dynamic
+            configure_platform: Darwin-clang-dynamic
             exe_name: vorpalite
 
     steps:
