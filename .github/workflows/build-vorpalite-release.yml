@@ -78,12 +78,23 @@ jobs:
           cp "$exe" dist/
           cp LICENSE dist/
 
-      - name: Package and checksum
+      - name: Package and checksum (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $zip = "vorpalite-${{ matrix.platform_id }}.zip"
+          Compress-Archive -Path dist\* -DestinationPath "dist\$zip"
+          $hash = (Get-FileHash "dist\$zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $zip" | Tee-Object "dist\$zip.sha256"
+
+      # macOS has no sha256sum (uses shasum -a 256 instead)
+      - name: Package and checksum (Linux/macOS)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           cd dist
           zip -r "vorpalite-${{ matrix.platform_id }}.zip" .
-          sha256sum "vorpalite-${{ matrix.platform_id }}.zip" | tee "vorpalite-${{ matrix.platform_id }}.zip.sha256"
+          (sha256sum "vorpalite-${{ matrix.platform_id }}.zip" 2>/dev/null || shasum -a 256 "vorpalite-${{ matrix.platform_id }}.zip") | tee "vorpalite-${{ matrix.platform_id }}.zip.sha256"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
