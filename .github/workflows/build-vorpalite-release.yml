@@ -23,10 +23,6 @@ jobs:
             platform_id: lin64
             configure_platform: Linux64-gcc
             exe_name: vorpalite
-          - os: macos-13
-            platform_id: mac64
-            configure_platform: Darwin-clang
-            exe_name: vorpalite
           - os: macos-14
             platform_id: mac64-arm64
             configure_platform: Darwin-clang
