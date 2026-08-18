@@ -21,15 +21,15 @@ jobs:
             exe_name: vorpalite.exe
           - os: ubuntu-latest
             platform_id: lin64
-            configure_platform: Linux64-gcc-dynamic
+            configure_platform: Linux64-gcc
             exe_name: vorpalite
           - os: macos-13
             platform_id: mac64
-            configure_platform: Darwin-clang-dynamic
+            configure_platform: Darwin-clang
             exe_name: vorpalite
           - os: macos-14
             platform_id: mac64-arm64
-            configure_platform: Darwin-clang-dynamic
+            configure_platform: Darwin-clang
             exe_name: vorpalite
 
     steps:
@@ -50,9 +50,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libtbb-dev
 
+      # configure.bat hardcodes the dynamic platform, so configure directly with the static one instead
       - name: Configure (Windows)
         if: runner.os == 'Windows'
-        run: .\configure.bat
+        run: cmake -S . -B build\Windows -DVORPALINE_PLATFORM:STRING=Win-vs-generic
 
       - name: Configure (Linux/macOS)
         if: runner.os != 'Windows'
