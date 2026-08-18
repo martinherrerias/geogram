@@ -43,6 +43,13 @@ jobs:
       - name: Select minimal build options
         run: cp cmake/options/CMakeOptions.txt.Minimal CMakeOptions.txt
 
+      # libstdc++'s parallel STL (used by std::execution::par in algorithm.h) links against system TBB regardless of GEOGRAM_WITH_TBB
+      - name: Install TBB (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libtbb-dev
+
       - name: Configure (Windows)
         if: runner.os == 'Windows'
         run: .\configure.bat
