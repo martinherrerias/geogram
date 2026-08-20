@@ -1,3 +1,24 @@
+# Builds statically linked vorpalite binaries for Linux (x64), macOS (ARM64), and Windows (x64).
+#
+# Source is fetched from BrunoLevy/geogram (use the 'ref' input to select a tag, branch, or commit).
+# A minimal option set (cmake/options/CMakeOptions.txt.Minimal) is used, which builds only the
+# vorpalite library and executable, skipping graphics, tests, and other CLI tools.
+#
+# Using GEOGRAM_WITH_TBB so that the resulting binaries are fully self-contained with no external
+# DLL/shared library dependencies.
+# CMAKE_POLICY_VERSION_MINIMUM=3.5 is passed to accommodate oneTBB's legacy cmake_minimum_required
+# with CMake 4.x.
+#
+# Platform-specific linking:
+#   - Linux (ubuntu-latest, Linux64-gcc): fully static (-static -static-libstdc++ -static-libgcc)
+#   - macOS (macos-14, Darwin-clang): static libs, dynamic system framework loading
+#   - Windows (windows-latest, Win-vs-generic): static runtime (/MT)
+#
+# Each build is packaged as a zip with a SHA-256 checksum and published as a GitHub release
+# tagged geogram-v<version>, where the version is read from CMakeLists.txt.
+#
+# Co-authored-by: GitHub Copilot, opencode/big-pickle
+
 name: Build vorpalite release
 
 on:
@@ -36,12 +57,9 @@ jobs:
           ref: ${{ inputs.ref }}
           submodules: recursive
 
-      # Minimal option set builds only the vorpalite lib+executable, skipping graphics/tests/other CLI tools
       - name: Select minimal build options
         run: cp cmake/options/CMakeOptions.txt.Minimal CMakeOptions.txt
 
-      # GEOGRAM_WITH_TBB must be set via -D (not CMakeOptions.txt) because onetbb.cmake is
-      # included before CMakeOptions.txt is read
       - name: Configure (Windows)
         if: runner.os == 'Windows'
         shell: bash
