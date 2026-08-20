@@ -1,0 +1,168 @@
+name: Build vorpalite release
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag/branch/commit to build (default: current ref)"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    name: ${{ matrix.platform_id }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Dynamic platforms: geogram's static build forces -static linking, which needs a static
+        # libtbb.a that apt's libtbb-dev doesn't ship. We bundle+rpath-patch the shared lib instead.
+        include:
+          - os: windows-latest
+            platform_id: win64
+            exe_name: vorpalite.exe
+          - os: ubuntu-latest
+            platform_id: lin64
+            configure_platform: Linux64-gcc-dynamic
+            exe_name: vorpalite
+          - os: macos-14
+            platform_id: mac64-arm64
+            configure_platform: Darwin-clang-dynamic
+            exe_name: vorpalite
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          submodules: recursive
+
+      # Minimal option set builds only the vorpalite lib+executable, skipping graphics/tests/other CLI tools
+      - name: Select minimal build options
+        run: cp cmake/options/CMakeOptions.txt.Minimal CMakeOptions.txt
+
+      # libstdc++'s parallel STL (used by std::execution::par in algorithm.h) links against system TBB regardless of GEOGRAM_WITH_TBB
+      - name: Install TBB and patchelf (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libtbb-dev patchelf
+
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        run: .\configure.bat
+
+      - name: Configure (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: ./configure.sh ${{ matrix.configure_platform }}
+
+      - name: Build vorpalite (Windows)
+        if: runner.os == 'Windows'
+        run: cmake --build build\Windows --target vorpalite --config Release
+
+      - name: Build vorpalite (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: cmake --build build/${{ matrix.configure_platform }}-Release --target vorpalite --config Release
+
+      - name: Locate built executable
+        shell: bash
+        run: |
+          exe=$(find build -type f -name "${{ matrix.exe_name }}" | head -n 1)
+          if [ -z "$exe" ]; then
+            echo "Could not find ${{ matrix.exe_name }} under build/"
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$exe" dist/
+          cp LICENSE dist/
+
+      # Executable is dynamically linked, so its shared lib must ship alongside it
+      - name: Bundle shared library (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: find build -name 'geogram.dll' -exec cp {} dist/ \;
+
+      # Linux exe references the .so by absolute build path; patchelf rewrites it to look next to itself
+      - name: Bundle shared library (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          find build -name 'libgeogram.so*' -exec cp --dereference {} dist/ \;
+          patchelf --set-rpath '$ORIGIN' "dist/${{ matrix.exe_name }}"
+
+      # macOS exe embeds an absolute install-name for the dylib; rewrite it to @executable_path
+      - name: Bundle shared library (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          find build -name 'libgeogram*.dylib' -exec cp {} dist/ \;
+          for dep in $(otool -L "dist/${{ matrix.exe_name }}" | grep -o '/.*libgeogram[^ ]*dylib'); do
+            install_name_tool -change "$dep" "@executable_path/$(basename "$dep")" "dist/${{ matrix.exe_name }}"
+          done
+
+      - name: Smoke test executable
+        shell: bash
+        run: |
+          chmod +x "dist/${{ matrix.exe_name }}" || true
+          "./dist/${{ matrix.exe_name }}" --version
+
+      - name: Package and checksum (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $zip = "vorpalite-${{ matrix.platform_id }}.zip"
+          Compress-Archive -Path dist\* -DestinationPath "dist\$zip"
+          $hash = (Get-FileHash "dist\$zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $zip" | Tee-Object "dist\$zip.sha256"
+
+      # macOS has no sha256sum (uses shasum -a 256 instead)
+      - name: Package and checksum (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          cd dist
+          zip -r "vorpalite-${{ matrix.platform_id }}.zip" .
+          (sha256sum "vorpalite-${{ matrix.platform_id }}.zip" 2>/dev/null || shasum -a 256 "vorpalite-${{ matrix.platform_id }}.zip") | tee "vorpalite-${{ matrix.platform_id }}.zip.sha256"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vorpalite-${{ matrix.platform_id }}
+          path: |
+            dist/vorpalite-${{ matrix.platform_id }}.zip
+            dist/vorpalite-${{ matrix.platform_id }}.zip.sha256
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: Releases
+          merge-multiple: true
+
+      - name: Determine version and print checksums
+        id: version
+        run: |
+          major=$(grep 'set(VORPALINE_VERSION_MAJOR' CMakeLists.txt | sed -e 's/[^0-9]//g')
+          minor=$(grep 'set(VORPALINE_VERSION_MINOR' CMakeLists.txt | sed -e 's/[^0-9]//g')
+          patch=$(grep 'set(VORPALINE_VERSION_PATCH' CMakeLists.txt | sed -e 's/[^0-9]//g')
+          echo "version=$major.$minor.$patch" >> "$GITHUB_OUTPUT"
+          cat Releases/*.sha256
+
+      - name: Deploy release files
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: vorpalite-bin-v${{ steps.version.outputs.version }}
+          draft: false
+          files: Releases/*.zip
+          fail_on_unmatched_files: true
