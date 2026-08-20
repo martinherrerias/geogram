@@ -40,25 +40,21 @@ jobs:
       - name: Select minimal build options
         run: cp cmake/options/CMakeOptions.txt.Minimal CMakeOptions.txt
 
-      # libstdc++'s parallel STL (used by std::execution::par in algorithm.h) links against system TBB regardless of GEOGRAM_WITH_TBB
-      - name: Install TBB (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libtbb-dev
-
-      # configure.bat hardcodes the dynamic platform, so configure directly with the static one instead
+      # GEOGRAM_WITH_TBB must be set via -D (not CMakeOptions.txt) because onetbb.cmake is
+      # included before CMakeOptions.txt is read
       - name: Configure (Windows)
         if: runner.os == 'Windows'
-        run: cmake -S . -B build\Windows -DVORPALINE_PLATFORM:STRING=Win-vs-generic
+        shell: bash
+        run: cmake -S . -B build/Windows -DVORPALINE_PLATFORM:STRING=Win-vs-generic -DGEOGRAM_WITH_TBB=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
       - name: Configure (Linux/macOS)
         if: runner.os != 'Windows'
-        run: ./configure.sh ${{ matrix.configure_platform }}
+        run: cmake -S . -B build/${{ matrix.configure_platform }}-Release -DCMAKE_BUILD_TYPE:STRING=Release -DVORPALINE_PLATFORM:STRING=${{ matrix.configure_platform }} -DGEOGRAM_WITH_TBB=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
       - name: Build vorpalite (Windows)
         if: runner.os == 'Windows'
-        run: cmake --build build\Windows --target vorpalite --config Release
+        shell: bash
+        run: cmake --build build/Windows --target vorpalite --config Release
 
       - name: Build vorpalite (Linux/macOS)
         if: runner.os != 'Windows'
