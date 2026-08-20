@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Tag/branch/commit to build (default: current ref)"
+        description: "Tag/branch/commit to build from BrunoLevy/geogram"
         required: false
-        default: ""
+        default: "main"
 
 jobs:
   build:
@@ -32,7 +32,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          repository: BrunoLevy/geogram
+          ref: ${{ inputs.ref }}
           submodules: recursive
 
       # Minimal option set builds only the vorpalite lib+executable, skipping graphics/tests/other CLI tools
@@ -117,7 +118,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          repository: BrunoLevy/geogram
+          ref: ${{ inputs.ref }}
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
