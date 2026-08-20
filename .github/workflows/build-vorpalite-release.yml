@@ -57,6 +57,14 @@ jobs:
           ref: ${{ inputs.ref }}
           submodules: recursive
 
+      - name: Verify ref is tag
+        shell: bash
+        run: |
+          if ! git show-ref -q --verify "refs/tags/${{ inputs.ref }}" || [[ "${{ inputs.ref }}" != v* ]]; then
+            echo "ERROR: The ref input (${{ inputs.ref }}) does not look like a version tag (e.g., v1.2.3) or does not exist in BrunoLevy/geogram."
+            exit 1
+          fi
+
       - name: Select minimal build options
         run: cp cmake/options/CMakeOptions.txt.Minimal CMakeOptions.txt
 
@@ -141,19 +149,15 @@ jobs:
           path: Releases
           merge-multiple: true
 
-      - name: Determine version and print checksums
-        id: version
-        run: |
-          major=$(grep 'set(VORPALINE_VERSION_MAJOR' CMakeLists.txt | sed -e 's/[^0-9]//g')
-          minor=$(grep 'set(VORPALINE_VERSION_MINOR' CMakeLists.txt | sed -e 's/[^0-9]//g')
-          patch=$(grep 'set(VORPALINE_VERSION_PATCH' CMakeLists.txt | sed -e 's/[^0-9]//g')
-          echo "version=$major.$minor.$patch" >> "$GITHUB_OUTPUT"
-          cat Releases/*.sha256
+      - name: Print checksums
+        id: checksums
+        shell: bash
+        run: cat Releases/*.sha256
 
       - name: Deploy release files
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: geogram-v${{ steps.version.outputs.version }}
+          tag_name: ${{ inputs.ref }}
           draft: false
           files: Releases/*.zip
           fail_on_unmatched_files: true
