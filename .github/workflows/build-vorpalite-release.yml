@@ -135,7 +135,7 @@ jobs:
       - name: Deploy release files
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: vorpalite-bin-v${{ steps.version.outputs.version }}
+          tag_name: geogram-v${{ steps.version.outputs.version }}
           draft: false
           files: Releases/*.zip
           fail_on_unmatched_files: true
